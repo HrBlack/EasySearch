@@ -42,8 +42,7 @@ unordered_map<string, DocList> indexing(vector<string> doc_content){
         int count = 0;
         if (inverted_index.find(word) == inverted_index.end()){
             inverted_index[word] = DocList({doc_id}, {++count}, {{0}});
-        }
-        else{
+        } else{
             if (inverted_index[word].doc_ids.back() == doc_id){
                 inverted_index[word].frequencies.back() ++;
             }
@@ -67,8 +66,7 @@ DocList look_up(string query){
             if (id == -1){
                 freq_of_term_in_doc = {};
                 break;
-            }
-            else{
+            } else{
                 freq_of_term_in_doc.push_back(inverted_index[tokenized_query[j]].frequencies[id]);
                 count ++;
             }
@@ -102,11 +100,9 @@ int binary_search(vector<int> vec, int target){
         int mid = (i+j)/2;
         if (vec[mid] < target){
             i = mid + 1;
-        }
-        else if(vec[mid] > target){
+        } else if(vec[mid] > target){
             j = mid - 1;
-        }
-        else{
+        } else{
             return mid;
         }
     }
