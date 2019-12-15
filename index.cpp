@@ -1,125 +1,128 @@
-// #include <stdio.h>
+#include "data.h"
+
 #include <iostream>
-#include <vector>
+#include <map>
 #include <unordered_map>
-#include <unordered_set>
+#include <vector>
 
 using namespace std;
 
-// typedef vector<DocItem> DocList;
-
-// class DocItem
-// {
-//     public:
-//     int doc_id, frequency;
-//     vector<int> position;
-//     DocItem() = default;
-//     DocItem(int doc_id, int frequency, vector<int> position): 
-//         doc_id(doc_id), frequency(frequency), position(position){};
-// };
-
-class DocList
-{
-    public:
-    vector<int> doc_ids, frequencies;
-    vector<vector<int>> positions;
-    DocList() = default;
-    DocList(vector<int> doc_ids, vector<int> frequencies, vector<vector<int>> positions): 
-        doc_ids(doc_ids), frequencies(frequencies), positions(positions){};
+struct HitList{
+    int freq;
+    vector<int> positions;
 };
 
-vector<string> segmentation(string doc_content){
-    /* Do segmentation for the original content of a document,
-    return the tokenized content in vector */
-    return {"这个", "笔记本电脑", "多少钱"};
+typedef unordered_map<int, HitList> DocList;
+typedef unordered_map<string, DocList> InvertedIndex;
+
+void build_lexicon(){
+    // 切词并建立单词和doc的编号（本题不建立doc的字典也行，因为doc并没有重复）
 }
 
-unordered_map<string, DocList> indexing(vector<string> doc_content){
-    unordered_map<string, DocList> inverted_index;
-    int doc_id = 1;
-    for (int i = 0; i < doc_content.size(); i++){
-        string word = doc_content[i];
-        int count = 0;
-        if (inverted_index.find(word) == inverted_index.end()){
-            inverted_index[word] = DocList({doc_id}, {++count}, {{0}});
-        } else{
-            if (inverted_index[word].doc_ids.back() == doc_id){
-                inverted_index[word].frequencies.back() ++;
+vector<string> segment(string doc_content){
+    // 切词工具，待引入
+    return {"今天", "天气", "今天", "晴朗"};
+}
+
+void build_forward_index(){
+    // TBC
+}
+
+void build_inverted_index(const Data& data, InvertedIndex& inverted_index){
+    for (size_t i = 0; i < data.size(); ++i){
+        vector<string> segmented_doc = segment(data[i].doc);
+        for (size_t j = 0; j < segmented_doc.size(); ++j){
+            // 该单词不在倒排表的情况
+            if (inverted_index.find(segmented_doc[j]) == inverted_index.end()){
+                DocList initial_map;
+                initial_map[i] = {1, {static_cast<int>(j)}};
+                inverted_index[segmented_doc[j]] = initial_map;
+            }
+            // 该单词在倒排表中，但doc还未读取过
+            else if (inverted_index[segmented_doc[j]].find(i) == inverted_index[segmented_doc[j]].end()){
+                inverted_index[segmented_doc[j]][i] = {1, {static_cast<int>(j)}};
+            }
+            // 单词和doc都在表里
+            else{
+                inverted_index[segmented_doc[j]][i].freq += 1;
+                inverted_index[segmented_doc[j]][i].positions.push_back(j);
             }
         }
     }
-    return inverted_index;
 }
 
-unordered_map<string, DocList> inverted_index;
-
-DocList look_up(string query){
-    vector<string> tokenized_query = segmentation(query);
-    vector<int> doc_intersect;
-    vector<vector<int>> frequency_intersect;
-    for (int i = 0; i < inverted_index[tokenized_query[0]].doc_ids.size(); ++i){
-        int base_id = inverted_index[tokenized_query[0]].doc_ids[i];
-        int total = tokenized_query.size(), count = 1;
-        vector<int> freq_of_term_in_doc;
-        for (int j = 1; j < tokenized_query.size(); ++j){
-            int id = binary_search(inverted_index[tokenized_query[j]].doc_ids, base_id);
-            if (id == -1){
-                freq_of_term_in_doc = {};
-                break;
-            } else{
-                freq_of_term_in_doc.push_back(inverted_index[tokenized_query[j]].frequencies[id]);
-                count ++;
+// 搜索模块：对query term进行倒排拉链合并，未来考虑对拉链进行截断处理
+vector<int> intersect_zipper(const vector<string>& segmented_query, const InvertedIndex& inverted_index){
+    unordered_map<int, int> doc_counter;
+    vector<int> intersection;
+    for (auto word : segmented_query){
+        for (auto doc : inverted_index.at(word)){
+            if (doc_counter.find(doc.first) == doc_counter.end()){
+                doc_counter[doc.first] = 1;
+            }else{
+                doc_counter[doc.first] += 1;
             }
         }
-        if (total == count){
-            doc_intersect.push_back(base_id);
-            frequency_intersect.push_back(freq_of_term_in_doc);
+    }
+    for (auto item : doc_counter){
+        if (doc_counter[item.second] == segmented_query.size()){
+            intersection[item.first] = item.second;
         }
     }
-
-    // 利用set存储
-    // for (string word : tokenized_query){
-    //     for (int doc_id : inverted_index[word].doc_ids){
-    //         doc_intersection.insert(doc_id);
-    //     }
-    // }
-    // DocList intersection;
-    // for (string term : tokenized_query){
-    //     if (inverted_index.find(term) != inverted_index.end()){
-    //         return;
-    //     }
-    // }
+    return intersection;
 }
 
-int binary_search(vector<int> vec, int target){
-    int i = 0, j = vec.size()-1;
-    if (target < vec[i] || target > vec[j]){
-        return -1;
-    }
-    while (i < j){
-        int mid = (i+j)/2;
-        if (vec[mid] < target){
-            i = mid + 1;
-        } else if(vec[mid] > target){
-            j = mid - 1;
-        } else{
-            return mid;
+namespace abc{
+// 排序模块
+vector<pair<int, double>> rank(vector<string>& segmented_query, vector<int>& recall_docs, InvertedIndex& inverted_index){
+    // tf-idf方法
+    vector<pair<int, double>> doc_scores;
+    for (auto doc : recall_docs){
+        double score = 0;
+        for (auto word : segmented_query){
+            int tf = inverted_index[word][doc].freq;
+            double idf = 1.0 / inverted_index[word].size();
+            score += tf * idf;
         }
+        doc_scores.push_back(make_pair(doc, score));
     }
-    return -1;
+    sort(doc_scores.begin(), 
+         doc_scores.end(), 
+         [] (const pair<int, double> &a, const pair<int, double> &b) {return a.second > b.second;});
+    return doc_scores;
 }
-
-vector<float> ranking(){
-    int tf;
-    float idf;
-    float weight = tf * idf;
-    return {weight};
 }
 
 int main(){
-    vector<string> str = segmentation("s");
-    unordered_map<string, DocList> index = indexing(str);
-    for (auto iter = index.begin(); iter != index.end(); iter++){
-        cout << (*iter).first << '\t' << (*iter).second.frequencies.back() << endl;
+    Data data = load_data("train.txt");
+    // unordered_map<string, int> lexicon;
+
+    // 建立倒排表
+    InvertedIndex inverted_index;
+    build_inverted_index(data, inverted_index);
+
+    // 对query term进行倒排拉链合并，然后完成排序
+    for (auto item : data){
+        vector<string> segmented_query = segment(item.query);
+        vector<int> recall_list = intersect_zipper(segmented_query, inverted_index);
+        vector<pair<int, double>> doc_scores = abc::rank(segmented_query, recall_list, inverted_index);
     }
 }
+
+// int binary_search(vector<int> vec, int target){
+//     int i = 0, j = vec.size()-1;
+//     if (target < vec[i] || target > vec[j]){
+//         return -1;
+//     }
+//     while (i < j){
+//         int mid = (i+j)/2;
+//         if (vec[mid] < target){
+//             i = mid + 1;
+//         } else if(vec[mid] > target){
+//             j = mid - 1;
+//         } else{
+//             return mid;
+//         }
+//     }
+//     return -1;
+// }
